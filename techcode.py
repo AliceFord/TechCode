@@ -56,17 +56,18 @@ def encodeData(data, palette, encodeMode, bitmask, size):
 	if encodeMode == EncodeModes.BYTES:
 		hexData = "".join([str(hex(ord(c))).replace("0x", "") for c in data])
 		if size == "auto":
-			foundSize = math.ceil(math.sqrt(len(data)*2)) + 1
+			foundSize = math.ceil(math.sqrt((len(data) + 4)*2)) + 1
 
 			if foundSize < 17:
 				size = (17, 17)
 			else:
 				size = (foundSize, foundSize)
 		else:
-			if ((size[0] - 1) * (size[1] - 1)) - len(hexData) < 0:
+			if ((size[0] - 1) * (size[1] - 1)) - len(hexData) <= 4:
 				raise Exception("Text too large for chosen size techcode!")
 
-		hexData += "".join(["0" for _ in range(((size[0] - 1) * (size[1] - 1)) - len(hexData))])
+		hexData += "ffff"
+		hexData += "".join([random.choice("0123456789abcdef") for _ in range(((size[0] - 1) * (size[1] - 1)) - len(hexData))])
 		finalData = [[] for _ in range(size[0]-1)]
 		for i in range(size[0]-1):
 			for j in range(size[1]-1):
@@ -111,15 +112,23 @@ def decodeData(pixels, size):
 
 	output = ""
 
-	c = False
+	finished = False
 	jCounter = math.ceil((size[1]-1)/2)
 	for i in range(size[0]-1):
+		if finished:
+			break
 		for j in range(jCounter):
 			if size[0] % 2 == 0 and i % 2 == 1:
 				if j < jCounter-1:
+					if colourPalette.index(dataWithoutMeta[i*(size[0]-1)+j*2+1]) * 16 + colourPalette.index(dataWithoutMeta[i*(size[0]-1)+j*2+2]) == 255:
+						finished = True
+						break
 					output += chr(colourPalette.index(dataWithoutMeta[i*(size[0]-1)+j*2+1]) * 16 + colourPalette.index(dataWithoutMeta[i*(size[0]-1)+j*2+2]))
 			else:
 				try:
+					if colourPalette.index(dataWithoutMeta[i*(size[0]-1)+j*2]) * 16 + colourPalette.index(dataWithoutMeta[i*(size[0]-1)+j*2+1]) == 255:
+						finished = True
+						break
 					output += chr(colourPalette.index(dataWithoutMeta[i*(size[0]-1)+j*2]) * 16 + colourPalette.index(dataWithoutMeta[i*(size[0]-1)+j*2+1]))
 				except IndexError:
 					break
