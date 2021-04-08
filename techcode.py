@@ -9,7 +9,10 @@ class EncodeModes(enum.Enum):
 	BYTES = 0
 
 
-def writeData(data, palette, size, filename="data.png", writeMetadata=True):
+BITMASK_MODES = [lambda i, j: (i + j) % 2 == 0, lambda i, j: i % 2 == 0, lambda i, j: j % 3 == 0, lambda i, j: (i + j) % 3 == 0, lambda i, j: (i // 2 + j // 3) % 2 == 0, lambda i, j: ((i * j) % 2) + ((i * j) % 3) == 0, lambda i, j: (((i * j) % 2) + ((i * j) % 3)) % 2 == 0, lambda i, j: (((i + j) % 2) + ((i * j) % 3)) % 2 == 0]
+
+
+def writeData(data, palette, size, bitmask, filename="data.png", writeMetadata=True):
 	f = open(filename, 'wb')
 	w = png.Writer(size[0], size[1], greyscale=False)
 
@@ -41,13 +44,15 @@ def writeData(data, palette, size, filename="data.png", writeMetadata=True):
 			data[size[1]-1].append(0)
 			data[size[1]-1].append(0)
 
+		(data[size[1]-1][4*3], data[size[1]-1][4*3+1], data[size[1]-1][4*3+2]) = palette[bitmask]
+
 		data[size[1]-1] = tuple(data[size[1]-1])
 
 	w.write(f, data)
 	f.close()
 
 
-def encodeData(data, palette, encodeMode, bml, size):  # bml = bitmask lambda
+def encodeData(data, palette, encodeMode, bitmask, size):
 	if encodeMode == EncodeModes.BYTES:
 		hexData = "".join([str(hex(ord(c))).replace("0x", "") for c in data])
 		if size == "auto":
@@ -69,7 +74,7 @@ def encodeData(data, palette, encodeMode, bml, size):  # bml = bitmask lambda
 
 	for i in range(size[0]-1):
 		for j in range(size[1]-1):
-			if bml(i, j):
+			if BITMASK_MODES[bitmask](i, j):
 				tempData = [finalData[i][j*3], finalData[i][j*3+1], finalData[i][j*3+2]]
 				tempData = tempData[1:] + tempData[:1]
 				finalData[i][j*3] = tempData[0]
@@ -82,13 +87,15 @@ def encodeData(data, palette, encodeMode, bml, size):  # bml = bitmask lambda
 	return finalData
 
 
-def decodeData(pixels, bml, size):
+def decodeData(pixels, size):
 	# Get palette
 	palette = []
 	for i in range(8):
 		palette.append(pixels[size[0] * (i * 2 + 1)])
 	for i in range(8):
 		palette.append(pixels[(size[1]-1) * size[0] + (i * 2 + 1)])
+
+	bml = BITMASK_MODES[palette.index(pixels[size[1] * (size[0] - 1) + 4])]
 
 	dataWithoutMeta = []
 	for i in range(size[0]-1):
@@ -123,16 +130,14 @@ def decodeData(pixels, bml, size):
 if __name__ == '__main__':
 	colourPalette = [(0, 0, 128), (0, 128, 0), (0, 128, 128), (128, 0, 0), (128, 0, 128), (128, 128, 0), (128, 128, 128), (128, 128, 255), (128, 255, 128), (128, 255, 255), (255, 128, 128), (255, 128, 255), (255, 255, 128), (0, 128, 255), (128, 255, 0), (255, 0, 128)]
 
-	bitmaskLambda = lambda i, j: (((i + j) % 2) + ((i * j) % 3)) % 2 == 0
-
 	autoSize = input("Automatically choose techcode size (y/n)? ")
 	if "n" in autoSize:
 		codeSize = (int(input("X axis size (min 17): ")), int(input("Y axis size (min 17): ")))
 	else:
 		codeSize = "auto"
-
-	currentData = encodeData(input("Enter the data to be encoded: "), colourPalette, EncodeModes.BYTES, bitmaskLambda, codeSize)
+	bitmaskData = 4
+	currentData = encodeData(input("Enter the data to be encoded: "), colourPalette, EncodeModes.BYTES, bitmaskData, codeSize)
 	print(f"Size chosen: {len(currentData)+1}x{len(currentData[0])//3+1}")
-	writeData(currentData, colourPalette, (len(currentData)+1, len(currentData[0])//3+1))
+	writeData(currentData, colourPalette, (len(currentData)+1, len(currentData[0])//3+1), bitmaskData)
 	im = Image.open('data.png', 'r')
-	print(decodeData(list(im.getdata()), bitmaskLambda, (im.width, im.height)))
+	print(decodeData(list(im.getdata()), (im.width, im.height)))
