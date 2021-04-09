@@ -4,6 +4,7 @@ import enum
 from PIL import Image
 import math
 import string
+import unireedsolomon as rs
 
 
 class EncodeMode(enum.IntEnum):
@@ -75,6 +76,9 @@ def int2base(x, base):
 
 
 def encodeData(data, palette, encodeMode, bitmask, size):
+	coder = rs.RSCoder(len(data)+5, len(data))
+	data = coder.encode(data)
+	data = bytearray(data.encode())
 	if encodeMode == EncodeMode.BYTES:
 		minBits = 0
 		counter = 256
@@ -83,7 +87,7 @@ def encodeData(data, palette, encodeMode, bitmask, size):
 			minBits += 1
 			if counter <= 1:
 				break
-		hexData = "".join(["0"*(minBits-len(str(int2base(ord(c), len(palette))))) + str(int2base(ord(c), len(palette))) for c in data])
+		hexData = "".join(["0"*(minBits-len(str(int2base(c, len(palette))))) + str(int2base(c, len(palette))) for c in data])
 
 		if size == "auto":
 			foundSize = math.ceil(math.sqrt((len(data) + 4)*minBits)) + 1
@@ -152,23 +156,27 @@ def decodeData(pixels, size):
 			break
 
 	if encodingMode == EncodeMode.BYTES:
-		output = ""
+		output = bytearray()
 		for i in range(0, ((size[0]-1) * (size[1]-1)), minBits):
 			if palette.index(dataWithoutMeta[i]) + palette.index(dataWithoutMeta[i+1]) + palette.index(dataWithoutMeta[i+2]) + palette.index(dataWithoutMeta[i+3]) == 0:
 				break
 			current = 0
 			for j in range(minBits):
 				current += palette.index(dataWithoutMeta[i + j]) * (len(palette) ** (minBits - j - 1))
-			output += chr(current)
-
-		return output
+			output.append(current)
+		coder = rs.RSCoder(len(output) + 5, len(output))
+		return coder.decode(output.decode())
 
 
 if __name__ == '__main__':
 	colourPalette = []
-	for i in range(36):
-		colourPalette.append((math.floor((i/36) * 255), 255, 255))
-	#colourPalette = [(255, 128, 255), (255, 255, 128), (0, 128, 255), (128, 255, 0), (255, 0, 128)]  # (0, 128, 0), (0, 0, 128), (128, 0, 0),
+	# for _i in range(12):
+	# 	colourPalette.append((math.floor((_i/13) * 255), 255, 255))
+	# for _i in range(12):
+	# 	colourPalette.append((255, math.floor((_i/13) * 255), 255))
+	# for _i in range(12):
+	# 	colourPalette.append((255, 255, math.floor((_i/13) * 255)))
+	colourPalette = [(0, 128, 128), (128, 0, 128), (128, 128, 0), (0, 128, 0), (0, 0, 128), (128, 0, 0), (128, 128, 128), (255, 128, 255), (255, 255, 128), (128, 255, 255), (128, 128, 255), (128, 255, 128), (255, 128, 128), (0, 128, 255), (128, 255, 0), (255, 0, 128)]
 
 	autoSize = input("Automatically choose techcode size (y/n)? ")
 	if "n" in autoSize:
@@ -180,4 +188,4 @@ if __name__ == '__main__':
 	print(f"Size chosen: {len(currentData)+1}x{len(currentData[0])//3+1}")
 	writeData(currentData, colourPalette, (len(currentData)+1, len(currentData[0])//3+1), bitmaskData, EncodeMode.BYTES)
 	im = Image.open('data.png', 'r')
-	print(decodeData(list(im.getdata()), (im.width, im.height)))
+	print(decodeData(list(im.getdata()), (im.width, im.height))[0])
