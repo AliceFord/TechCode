@@ -13,9 +13,10 @@ class EncodeMode(enum.IntEnum):
 
 
 BITMASK_MODES = [lambda i, j: False, lambda i, j: i % 2 == 0, lambda i, j: j % 3 == 0, lambda i, j: (i + j) % 3 == 0, lambda i, j: (i // 2 + j // 3) % 2 == 0, lambda i, j: ((i * j) % 2) + ((i * j) % 3) == 0, lambda i, j: (((i * j) % 2) + ((i * j) % 3)) % 2 == 0, lambda i, j: (((i + j) % 2) + ((i * j) % 3)) % 2 == 0]
+EC_LEVEL_CONVERTER = [1.07, 1.15, 1.25, 1.30]
 
 
-def writeData(data, palette, size, bitmask, encodeMode, filename="data.png", writeMetadata=True):
+def writeData(data, palette, size, bitmask, encodeMode, ecLevel, filename="data.png", writeMetadata=True):
 	f = open(filename, 'wb')
 	w = png.Writer(size[0], size[1], greyscale=False)
 
@@ -23,10 +24,10 @@ def writeData(data, palette, size, bitmask, encodeMode, filename="data.png", wri
 
 	if writeMetadata:
 		for i in range(size[0]-1):
-			if i > size[0]:
-				break
+			if i == 2:
+				data[i] = palette[ecLevel] + data[i]
 
-			if i % 2 == 1 and len(palette) != paletteCounter:
+			elif i % 2 == 1 and len(palette) != paletteCounter:
 				data[i] = palette[paletteCounter] + data[i]
 				paletteCounter += 1
 			else:
@@ -42,6 +43,7 @@ def writeData(data, palette, size, bitmask, encodeMode, filename="data.png", wri
 				data[size[1]-1].append(0)
 				data[size[1]-1].append(0)
 
+		(data)
 		(data[size[1]-1][4*3], data[size[1]-1][4*3+1], data[size[1]-1][4*3+2]) = palette[bitmask]
 		(data[size[1]-1][2*3], data[size[1]-1][2*3+1], data[size[1]-1][2*3+2]) = palette[encodeMode.value]
 
@@ -75,8 +77,8 @@ def int2base(x, base):
 	return ''.join(digits)
 
 
-def encodeData(data, palette, encodeMode, bitmask, size):
-	coder = rs.RSCoder(len(data)+5, len(data))
+def encodeData(data, palette, encodeMode, bitmask, size, ecLevel):
+	coder = rs.RSCoder(math.ceil(len(data) * EC_LEVEL_CONVERTER[ecLevel]), len(data))
 	data = coder.encode(data)
 	data = bytearray(data.encode())
 	if encodeMode == EncodeMode.BYTES:
@@ -164,7 +166,8 @@ def decodeData(pixels, size):
 			for j in range(minBits):
 				current += palette.index(dataWithoutMeta[i + j]) * (len(palette) ** (minBits - j - 1))
 			output.append(current)
-		coder = rs.RSCoder(len(output) + 5, len(output))
+		ecLevel = EC_LEVEL_CONVERTER[palette.index(pixels[size[0] * 2])]
+		coder = rs.RSCoder(len(output) - 1, int((len(output)-1) / ecLevel))
 		return coder.decode(output.decode())
 
 
@@ -184,8 +187,9 @@ if __name__ == '__main__':
 	else:
 		codeSize = "auto"
 	bitmaskData = 4
-	currentData = encodeData(input("Enter the data to be encoded: "), colourPalette, EncodeMode.BYTES, bitmaskData, codeSize)
+	encodeLevel = 3
+	currentData = encodeData(input("Enter the data to be encoded: "), colourPalette, EncodeMode.BYTES, bitmaskData, codeSize, encodeLevel)
 	print(f"Size chosen: {len(currentData)+1}x{len(currentData[0])//3+1}")
-	writeData(currentData, colourPalette, (len(currentData)+1, len(currentData[0])//3+1), bitmaskData, EncodeMode.BYTES)
+	writeData(currentData, colourPalette, (len(currentData)+1, len(currentData[0])//3+1), bitmaskData, EncodeMode.BYTES, encodeLevel)
 	im = Image.open('data.png', 'r')
 	print(decodeData(list(im.getdata()), (im.width, im.height))[0])
