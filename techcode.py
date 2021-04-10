@@ -1,3 +1,5 @@
+import csv
+
 import png
 import random
 import enum
@@ -5,6 +7,9 @@ from PIL import Image
 import math
 import string
 import unireedsolomon as rs
+
+from tkinter.filedialog import askopenfile
+from tkinter import Tk
 
 
 class EncodeMode(enum.IntEnum):
@@ -14,6 +19,9 @@ class EncodeMode(enum.IntEnum):
 
 BITMASK_MODES = [lambda i, j: False, lambda i, j: i % 2 == 0, lambda i, j: j % 3 == 0, lambda i, j: (i + j) % 3 == 0, lambda i, j: (i // 2 + j // 3) % 2 == 0, lambda i, j: ((i * j) % 2) + ((i * j) % 3) == 0, lambda i, j: (((i * j) % 2) + ((i * j) % 3)) % 2 == 0, lambda i, j: (((i + j) % 2) + ((i * j) % 3)) % 2 == 0]
 EC_LEVEL_CONVERTER = [1.07, 1.15, 1.25, 1.30]
+
+
+# TODO: Alphanumeric mode
 
 
 def writeData(data, palette, size, bitmask, encodeMode, ecLevel, filename="data.png", writeMetadata=True):
@@ -43,7 +51,6 @@ def writeData(data, palette, size, bitmask, encodeMode, ecLevel, filename="data.
 				data[size[1]-1].append(0)
 				data[size[1]-1].append(0)
 
-		(data)
 		(data[size[1]-1][4*3], data[size[1]-1][4*3+1], data[size[1]-1][4*3+2]) = palette[bitmask]
 		(data[size[1]-1][2*3], data[size[1]-1][2*3+1], data[size[1]-1][2*3+2]) = palette[encodeMode.value]
 
@@ -79,8 +86,9 @@ def int2base(x, base):
 
 def encodeData(data, palette, encodeMode, bitmask, size, ecLevel):
 	coder = rs.RSCoder(math.ceil(len(data) * EC_LEVEL_CONVERTER[ecLevel]), len(data))
-	data = coder.encode(data)
-	data = bytearray(data.encode())
+	encData = coder.encode(data)
+	encData = bytearray(encData.encode())
+	encData.insert(len(data), 0)
 	if encodeMode == EncodeMode.BYTES:
 		minBits = 0
 		counter = 256
@@ -89,10 +97,10 @@ def encodeData(data, palette, encodeMode, bitmask, size, ecLevel):
 			minBits += 1
 			if counter <= 1:
 				break
-		hexData = "".join(["0"*(minBits-len(str(int2base(c, len(palette))))) + str(int2base(c, len(palette))) for c in data])
+		hexData = "".join(["0"*(minBits-len(str(int2base(c, len(palette))))) + str(int2base(c, len(palette))) for c in encData])
 
 		if size == "auto":
-			foundSize = math.ceil(math.sqrt((len(data) + 4)*minBits)) + 1
+			foundSize = math.ceil(math.sqrt((len(encData) + 4)*minBits)) + 1
 
 			if foundSize < len(palette)+1:
 				size = (len(palette)+1, len(palette)+1)
@@ -167,7 +175,8 @@ def decodeData(pixels, size):
 				current += palette.index(dataWithoutMeta[i + j]) * (len(palette) ** (minBits - j - 1))
 			output.append(current)
 		ecLevel = EC_LEVEL_CONVERTER[palette.index(pixels[size[0] * 2])]
-		coder = rs.RSCoder(len(output) - 1, int((len(output)-1) / ecLevel))
+		coder = rs.RSCoder(math.ceil(len(output[:output.find(b"\x00")]) * ecLevel), len(output[:output.find(b"\x00")]))
+		del output[output.index(b"\x00")]
 		return coder.decode(output.decode())
 
 
@@ -179,7 +188,18 @@ if __name__ == '__main__':
 	# 	colourPalette.append((255, math.floor((_i/13) * 255), 255))
 	# for _i in range(12):
 	# 	colourPalette.append((255, 255, math.floor((_i/13) * 255)))
-	colourPalette = [(0, 128, 128), (128, 0, 128), (128, 128, 0), (0, 128, 0), (0, 0, 128), (128, 0, 0), (128, 128, 128), (255, 128, 255), (255, 255, 128), (128, 255, 255), (128, 128, 255), (128, 255, 128), (255, 128, 128), (0, 128, 255), (128, 255, 0), (255, 0, 128)]
+	openPalette = input("Open previous palette (y/n)? ")
+	if "n" in openPalette:
+		colourPalette = [(0, 128, 128), (128, 0, 128), (128, 128, 0), (0, 128, 0), (0, 0, 128), (128, 0, 0),
+		                 (128, 128, 128), (255, 128, 255), (255, 255, 128), (128, 255, 255), (128, 128, 255),
+		                 (128, 255, 128), (255, 128, 128), (0, 128, 255), (128, 255, 0), (255, 0, 128)]
+	else:
+		Tk().withdraw()
+		filepath = askopenfile()
+		file = open(filepath.name)
+		reader = csv.reader(file, delimiter=" ")
+		for row in reader:
+			colourPalette.append((int(row[0]), int(row[1]), int(row[2])))
 
 	autoSize = input("Automatically choose techcode size (y/n)? ")
 	if "n" in autoSize:
